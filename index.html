@@ -30,16 +30,28 @@
         //  系統設定區 (System Configuration)
         // =================================================================================
         
-        // 1. API Key 設定
+        // 1. Gemini API Key (負責 AI 生成)
         const apiKey = "AIzaSyBGC9_EOIRNkUA1Sf0VH1S9Ua9Cxmj8Uh4"; 
+        // ⚠️ 給嘗試查看原始碼的人：
+        // 此 API Key 已在 Google Cloud Console 實施嚴格的 HTTP Referrer 網域限制。
+        // 直接複製此 Key 到其他網站或本地環境將無法運作 (會回傳 403 Forbidden)。
+        // 請勿浪費時間嘗試盜用，謝謝合作。
 
-        // 2. Firebase 設定 (用於全域額度控制，選填)
-        const firebaseConfig = null; 
+        // 2. Firebase 設定 (負責儲存 Email 名單)
+        // 連接到您的 Firebase 資料庫
+        const firebaseConfig = {
+            apiKey: "AIzaSyAhik_XEzS1ZhNRSEtziAB61ZBqazbxkJg",
+            authDomain: "businesscanvas-powwow.firebaseapp.com",
+            projectId: "businesscanvas-powwow",
+            storageBucket: "businesscanvas-powwow.firebasestorage.app",
+            messagingSenderId: "840074499108",
+            appId: "1:840074499108:web:4a3cec683e1a3ee87374b1"
+        };
 
         // 全站每日最大 API 呼叫次數 (Firebase 用)
         const GLOBAL_DAILY_LIMIT = 1000; 
         
-        // 個人本機每日限制 (已改回 50 次)
+        // 個人本機每日限制
         const LOCAL_DAILY_LIMIT = 50; 
 
         // =================================================================================
@@ -49,7 +61,7 @@
         import * as LucideReact from 'https://esm.sh/lucide-react@0.292.0';
         
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getFirestore, doc, getDoc, updateDoc, increment, setDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { getFirestore, doc, getDoc, updateDoc, increment, setDoc, addDoc, collection, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
         import { getAuth, signInAnonymously } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 
         const { 
@@ -62,14 +74,18 @@
 
         // --- Firebase 初始化 ---
         let db = null;
+        let auth = null;
+        
         if (firebaseConfig) {
             try {
                 const app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
-                const auth = getAuth(app);
-                signInAnonymously(auth).catch(console.error);
+                auth = getAuth(app);
+                signInAnonymously(auth).catch((error) => {
+                    console.error("Firebase 匿名登入失敗:", error);
+                });
             } catch (e) {
-                console.warn("Firebase Init Error (Using Local Mode):", e);
+                console.warn("Firebase Init Error (功能降級為純本機模式):", e);
             }
         }
 
@@ -81,19 +97,10 @@
             if (db) {
                 const docRef = doc(db, "usage_stats", today);
                 try {
-                    const docSnap = await getDoc(docRef);
-                    let currentCount = 0;
-                    if (docSnap.exists()) {
-                        currentCount = docSnap.data().count || 0;
-                    } else {
-                        await setDoc(docRef, { count: 0 });
-                    }
-                    if (currentCount >= GLOBAL_DAILY_LIMIT) throw new Error(`系統今日全站額度已滿，請明日再試。`);
-                    await updateDoc(docRef, { count: increment(1) });
-                } catch (e) {
-                    if (e.message.includes("已滿")) throw e;
-                    console.warn("Firestore access failed, falling back to local.");
-                }
+                     updateDoc(docRef, { count: increment(1) }).catch(() => {
+                         setDoc(docRef, { count: 1 }).catch(e => console.warn("Stats error", e));
+                     });
+                } catch (e) {}
             }
 
             // 2. 本機檢查
@@ -130,7 +137,8 @@
           zh: {
             title: "商業模式畫布",
             subtitle: "AI Power", 
-            setupAI: "設定主題",
+            version: "v1.0",
+            setupAI: "請在此先設定主題",
             reset: "重置",
             brandCases: "品牌案例",
             generateOneClick: "一鍵生成",
@@ -141,7 +149,6 @@
             modeSustainable: "永續模式",
             usageTitle: "今日額度",
             language: "English",
-            version: "v1",
             instructionTitle: "如何使用本工具：",
             step1Title: "1. 設定主題",
             step1Desc: "點擊左上角的「設定主題」，AI 會根據您的行業自動改寫引導文字。",
@@ -150,7 +157,7 @@
             step3Title: "3. 診斷與分享",
             step3Desc: "使用「商業診斷」找出盲點，完成後可將報告寄至 Email 保存。",
             quotaTitle: "4. 免費額度限制",
-            quotaDesc: "本工具為免費提供，設有每日使用上限。如果您收到通知，表示已超過每日額度，請明日再試。", // 您指定的說明
+            quotaDesc: "本工具為免費提供，設有每日使用上限。如果您收到通知，表示已超過每日額度，請明日再試。",
             aiConsultantTitle: "AI 創業導師",
             aiConsultantDesc: "請回答幾個簡單問題，讓我為您構思。",
             submitAndGenerate: "生成畫布",
@@ -182,12 +189,12 @@
             placeholderRefine: "或輸入自定義指令...",
             btnConfirmRefine: "確認修改",
             emailTitle: "寄送您的商業模式圖",
-            emailDesc: "注意：受限於網頁技術，我們無法直接夾帶檔案。系統將會自動把畫布內容整理成「文字報告」，並填入您的郵件內文中。",
+            emailDesc: "我們將協助您開啟郵件軟體，並自動帶入文字報告。",
             labelName: "您的稱呼",
             labelEmail: "收件信箱",
-            privacyNote: "此操作將開啟您裝置上的預設郵件 App (如 Gmail/Outlook)。",
-            btnSend: "開啟郵件軟體 (填入文字報告)",
-            btnSending: "準備中...",
+            privacyNote: "系統將自動開啟您的郵件軟體。您的 Email 僅用於本次寄送紀錄。",
+            btnSend: "開啟郵件軟體", // 修改處：移除了 (填入文字報告)
+            btnSending: "處理中...",
             sentTitle: "已開啟",
             sentDesc: "請在跳出的郵件視窗中確認內容並按下傳送。",
             btnBack: "返回畫布",
@@ -223,12 +230,12 @@
           en: {
             title: "Business Model Canvas",
             subtitle: "Public AI",
-            version: "v1",
-            setupAI: "Set Topic",
+            version: "v1.0",
+            setupAI: "Set Topic Here", 
             reset: "Reset",
             brandCases: "Brand Cases",
             generateOneClick: "One-Click",
-            instructionShow: "Guide & Limits",
+            instructionShow: "Guide",
             instructionHide: "Hide Guide",
             encyclopediaBtn: "Encyclopedia",
             modeStandard: "Standard",
@@ -243,7 +250,7 @@
             step3Title: "3. Diagnose",
             step3Desc: "Find blind spots, then Email report.",
             quotaTitle: "4. Daily Quota",
-            quotaDesc: `This is a free service with limits. If you get a notification, you've exceeded the daily limit (${LOCAL_DAILY_LIMIT}).`,
+            quotaDesc: `Free tier limited to ${LOCAL_DAILY_LIMIT} requests/day.`,
             aiConsultantTitle: "AI Consultant",
             aiConsultantDesc: "Answer to get started.",
             submitAndGenerate: "Generate",
@@ -497,7 +504,28 @@
         const EmailModal = ({ isOpen, onClose, canvasData, t, context }) => {
             const [email, setEmail] = useState('');
             const [name, setName] = useState('');
-            const handleSend = () => { 
+            const [isSending, setIsSending] = useState(false); // Add state for UI feedback
+
+            const handleSend = async () => {
+                if(!email) return;
+                setIsSending(true);
+
+                // 1. 儲存到 Firebase (如果已設定)
+                if (db) {
+                    try {
+                        await addDoc(collection(db, 'collected_emails'), {
+                            name: name,
+                            email: email,
+                            topic: context || "未命名專案",
+                            timestamp: serverTimestamp()
+                        });
+                        console.log("Email collected to Firestore");
+                    } catch (e) {
+                        console.warn("Failed to collect email (likely no config)", e);
+                    }
+                }
+
+                // 2. 準備郵件內容
                 let reportText = `商業模式畫布報告 - ${context || "未命名專案"}\n\n`;
                 Object.keys(canvasData).forEach(key => {
                     if (canvasData[key].items.length > 0) {
@@ -507,18 +535,21 @@
                     }
                 });
                 
-                if(reportText.length > 1500) reportText = reportText.substring(0, 1500) + "\n... (內容過長已截斷，請回網頁查看完整版)";
+                if(reportText.length > 1500) reportText = reportText.substring(0, 1500) + "\n... (內容過長已截斷)";
 
                 const subject = encodeURIComponent(`商業模式畫布報告: ${context || "Project"}`);
                 const body = encodeURIComponent(`Hi ${name},\n\n這是您的商業模式畫布報告摘要：\n\n${reportText}\n\nGenerated by AI Business Canvas`);
                 
-                // 使用 window.open 開啟新視窗，避免覆蓋當前頁面
+                // 3. 開啟郵件軟體
                 window.open(`mailto:${email}?subject=${subject}&body=${body}`, '_blank');
+                
+                setIsSending(false);
                 onClose();
             };
+
             if (!isOpen) return null;
             return (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[10000] p-4"><div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 animate-fadeIn relative"><button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={20} /></button><div className="text-center mb-6"><div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3"><Mail className="text-blue-600" size={24} /></div><h2 className="text-xl font-bold text-gray-800">{t.emailTitle}</h2><p className="text-sm text-gray-500 mt-1">{t.emailDesc}</p></div><div className="space-y-4"><div><label className="block text-xs font-bold text-gray-700 mb-1 uppercase">{t.labelName}</label><input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Name"/></div><div><label className="block text-xs font-bold text-gray-700 mb-1 uppercase">{t.labelEmail}</label><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="email@example.com"/></div><div className="bg-blue-50 p-3 rounded text-xs text-blue-700 flex gap-2"><ShieldCheck size={14} className="flex-shrink-0 mt-0.5"/>{t.privacyNote}</div><button onClick={handleSend} disabled={!email || !name} className={`w-full py-3 rounded-lg font-bold text-white flex items-center justify-center gap-2 transition-all ${(!email || !name) ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 shadow-md hover:shadow-lg'}`}><Send size={18}/>{t.btnSend}</button></div></div></div>
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[10000] p-4"><div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 animate-fadeIn relative"><button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={20} /></button><div className="text-center mb-6"><div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3"><Mail className="text-blue-600" size={24} /></div><h2 className="text-xl font-bold text-gray-800">{t.emailTitle}</h2><p className="text-sm text-gray-500 mt-1">{t.emailDesc}</p></div><div className="space-y-4"><div><label className="block text-xs font-bold text-gray-700 mb-1 uppercase">{t.labelName}</label><input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Name"/></div><div><label className="block text-xs font-bold text-gray-700 mb-1 uppercase">{t.labelEmail}</label><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="email@example.com"/></div><div className="bg-blue-50 p-3 rounded text-xs text-blue-700 flex gap-2"><ShieldCheck size={14} className="flex-shrink-0 mt-0.5"/>{t.privacyNote}</div><button onClick={handleSend} disabled={!email || !name || isSending} className={`w-full py-3 rounded-lg font-bold text-white flex items-center justify-center gap-2 transition-all ${(!email || !name || isSending) ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 shadow-md hover:shadow-lg'}`}>{isSending ? "處理中..." : <><Send size={18}/>{t.btnSend}</>}</button></div></div></div>
             );
         };
 
@@ -748,7 +779,7 @@
                 <div className="flex items-center gap-4 w-full md:w-auto shrink-0">
                     <div className="p-2.5 bg-slate-800 rounded-lg shadow-lg text-white"><Layout size={24} /></div>
                     <div>
-                        <h1 className="text-2xl font-bold text-slate-800 tracking-tight">{t.title} <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full ml-2">v5.7</span></h1>
+                        <h1 className="text-2xl font-bold text-slate-800 tracking-tight">{t.title}</h1>
                         <div className="text-sm text-gray-500 mt-1 flex items-center gap-2">
                             <button onClick={()=>setIsContextModalOpen(true)} className="flex items-center gap-1 hover:text-indigo-600 transition-colors border-b border-dashed border-gray-300 hover:border-indigo-500"><Edit3 size={12}/> {businessContext || t.setupAI}</button>
                         </div>
@@ -812,7 +843,7 @@
                       <button onClick={()=>setIsEmailModalOpen(true)} className="px-8 py-3 bg-slate-800 text-white rounded-xl shadow-lg hover:bg-slate-900 font-bold flex items-center gap-2"><Mail size={20}/> {t.btnEmail}</button>
                   </div>
               </div>
-              <footer className="text-center text-gray-400 text-xs mt-8 pb-8 no-print">Designed for Strategy & Clarity (Public Edition)</footer>
+              <footer className="text-center text-gray-400 text-xs mt-8 pb-8 no-print">如果你想要解鎖使用次數，歡迎與我們聯絡開啟付費版本。</footer>
             </div>
           );
         }
