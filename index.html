@@ -32,13 +32,9 @@
         
         // 1. Gemini API Key (負責 AI 生成)
         const apiKey = "AIzaSyBGC9_EOIRNkUA1Sf0VH1S9Ua9Cxmj8Uh4"; 
-        // ⚠️ 給嘗試查看原始碼的人：
-        // 此 API Key 已在 Google Cloud Console 實施嚴格的 HTTP Referrer 網域限制。
-        // 直接複製此 Key 到其他網站或本地環境將無法運作 (會回傳 403 Forbidden)。
-        // 請勿浪費時間嘗試盜用，謝謝合作。
+        // ⚠️ 給嘗試查看原始碼的人：API Key 已鎖定網域，請勿嘗試盜用。
 
         // 2. Firebase 設定 (負責儲存 Email 名單)
-        // 連接到您的 Firebase 資料庫
         const firebaseConfig = {
             apiKey: "AIzaSyAhik_XEzS1ZhNRSEtziAB61ZBqazbxkJg",
             authDomain: "businesscanvas-powwow.firebaseapp.com",
@@ -69,7 +65,8 @@
             Loader2, Settings, Leaf, Heart, Coins, Wand2, HelpCircle, ChevronUp, 
             ClipboardCheck, AlertTriangle, CheckCircle2, Mail, 
             Send, FileText, ShieldCheck, MessageCircleQuestion, Edit3, Bot, 
-            Building2, Globe, Lock, Briefcase, BookOpen, ToggleLeft, ToggleRight, Activity, AlertCircle
+            Building2, Globe, Lock, Briefcase, BookOpen, ToggleLeft, ToggleRight, Activity, AlertCircle, Copy,
+            Upload, Save
         } = LucideReact;
 
         // --- Firebase 初始化 ---
@@ -132,12 +129,75 @@
             return 0;
         };
 
+        // --- Morandi Pro Palette ---
+        const STYLE_BLUE = { bg: 'bg-slate-50', border: 'border-slate-200 hover:border-blue-300', icon: 'text-slate-600', accent: 'border-t-4 border-t-slate-400' };
+        const STYLE_CYAN = { bg: 'bg-cyan-50/50', border: 'border-cyan-200 hover:border-cyan-400', icon: 'text-cyan-700', accent: 'border-t-4 border-t-cyan-500' };
+        const STYLE_SKY  = { bg: 'bg-sky-50/50', border: 'border-sky-200 hover:border-sky-400', icon: 'text-sky-700', accent: 'border-t-4 border-t-sky-500' };
+        const STYLE_VIOLET = { bg: 'bg-violet-50/60', border: 'border-violet-200 hover:border-violet-400', icon: 'text-violet-700', accent: 'border-t-4 border-t-violet-500' };
+        const STYLE_ROSE = { bg: 'bg-rose-50/50', border: 'border-rose-200 hover:border-rose-400', icon: 'text-rose-700', accent: 'border-t-4 border-t-rose-500' };
+        const STYLE_PINK = { bg: 'bg-pink-50/50', border: 'border-pink-200 hover:border-pink-400', icon: 'text-pink-700', accent: 'border-t-4 border-t-pink-500' };
+        const STYLE_FUCHSIA = { bg: 'bg-fuchsia-50/50', border: 'border-fuchsia-200 hover:border-fuchsia-400', icon: 'text-fuchsia-700', accent: 'border-t-4 border-t-fuchsia-500' };
+        const STYLE_ORANGE = { bg: 'bg-orange-50/60', border: 'border-orange-200 hover:border-orange-400', icon: 'text-orange-700', accent: 'border-t-4 border-t-orange-500' };
+        const STYLE_EMERALD = { bg: 'bg-emerald-50/60', border: 'border-emerald-200 hover:border-emerald-400', icon: 'text-emerald-700', accent: 'border-t-4 border-t-emerald-500' };
+        const STYLE_STONE = { bg: 'bg-stone-100/60', border: 'border-stone-300 hover:border-stone-400', icon: 'text-stone-600', accent: 'border-t-4 border-t-stone-500' };
+        const STYLE_TEAL = { bg: 'bg-teal-50/60', border: 'border-teal-200 hover:border-teal-400', icon: 'text-teal-700', accent: 'border-t-4 border-t-teal-500' };
+        const STYLE_RED = { bg: 'bg-red-50/60', border: 'border-red-200 hover:border-red-400', icon: 'text-red-700', accent: 'border-t-4 border-t-red-500' };
+        const STYLE_AMBER = { bg: 'bg-amber-50/60', border: 'border-amber-200 hover:border-amber-400', icon: 'text-amber-700', accent: 'border-t-4 border-t-amber-500' };
+
+        const getInitialCanvasData = () => ({
+          keyPartners: { id: 'keyPartners', promptGuide: '列出此生意不可或缺的「策略夥伴」。', style: STYLE_CYAN, items: [] },
+          keyActivities: { id: 'keyActivities', promptGuide: '列出此生意為了運作，每天必須執行的「核心動作」。', style: STYLE_SKY, items: [] },
+          keyResources: { id: 'keyResources', promptGuide: '列出此生意擁有的「核心資產」。', style: STYLE_BLUE, items: [] },
+          valuePropositions: { id: 'valuePropositions', promptGuide: '挖掘此生意為客戶創造的「具體價值」。', style: STYLE_VIOLET, items: [] },
+          customerRelationships: { id: 'customerRelationships', promptGuide: '定義此生意與客戶的「互動深度」。', style: STYLE_FUCHSIA, items: [] },
+          channels: { id: 'channels', promptGuide: '列出此生意接觸客戶的「關鍵接觸點」。', style: STYLE_PINK, items: [] },
+          customerSegments: { id: 'customerSegments', promptGuide: '描繪此生意的「顧客畫像」。', style: STYLE_ROSE, items: [] },
+          costStructure: { id: 'costStructure', promptGuide: '分析此生意的「主要支出」。', style: STYLE_ORANGE, items: [] },
+          revenueStreams: { id: 'revenueStreams', promptGuide: '分析此生意的「賺錢方式」。', style: STYLE_EMERALD, items: [] },
+          envCost: { id: 'envCost', promptGuide: '誠實評估此生意對環境的「殺傷力」。', style: STYLE_STONE, items: [] },
+          envBenefit: { id: 'envBenefit', promptGuide: '思考此生意如何「修復地球」或「減少傷害」。', style: STYLE_TEAL, items: [] },
+          socCost: { id: 'socCost', promptGuide: '評估此生意可能帶來的「社會副作用」。', style: STYLE_RED, items: [] },
+          socBenefit: { id: 'socBenefit', promptGuide: '思考此生意如何「讓社會更好」。', style: STYLE_AMBER, items: [] }
+        });
+
+        const geminiCall = async (prompt, isJson = false) => {
+            if (!apiKey) {
+                alert("請填入 API Key！");
+                return "";
+            }
+            await checkAndIncrementUsage();
+            try {
+                const payload = { contents: [{ parts: [{ text: prompt }] }] };
+                if (isJson) payload.generationConfig = { responseMimeType: "application/json" };
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                const data = await response.json();
+                
+                if (data.error) {
+                    if (data.error.message && data.error.message.includes("referer")) {
+                        throw new Error(`⚠️ API Key 受限\n\n您的 API Key 設定了 HTTP Referrer 限制，但目前的網址不在允許清單中。\n\n請將以下網址加入 Google Cloud Console 白名單：\n${window.location.origin}/*\n\n或者暫時將限制設為「無 (None)」。`);
+                    }
+                    throw new Error(data.error.message);
+                }
+                
+                let text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+                if (isJson) {
+                    text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+                    try {
+                        const start = text.indexOf('{'); const end = text.lastIndexOf('}');
+                        if(start !== -1 && end !== -1) return JSON.parse(text.substring(start, end+1));
+                        const startArr = text.indexOf('['); const endArr = text.lastIndexOf(']');
+                        if(startArr !== -1 && endArr !== -1) return JSON.parse(text.substring(startArr, endArr+1));
+                    } catch(e) {} 
+                }
+                return text;
+            } catch (err) { console.error(err); alert(err.message); throw err; }
+        };
+
         // --- 翻譯資料庫 ---
         const TRANSLATIONS = {
           zh: {
             title: "商業模式畫布",
             subtitle: "AI Power", 
-            version: "v1.0",
             setupAI: "請在此先設定主題",
             reset: "重置",
             brandCases: "品牌案例",
@@ -178,7 +238,7 @@
             brandModalTitle: "品牌案例智庫",
             brandModalDesc: "選擇一個知名品牌，AI 將為您拆解其商業模式。",
             searchPlaceholder: "輸入任何品牌...",
-            btnAnalyze: "AI 分析 (覆蓋)",
+            btnAnalyze: "AI 分析", // 修改為簡潔版本
             brandOverwriteWarning: "⚠️ 此操作將覆蓋目前內容",
             brandDisclaimer: "內容由 AI 生成，僅供參考。",
             refineTitle: "內容優化器",
@@ -193,7 +253,7 @@
             labelName: "您的稱呼",
             labelEmail: "收件信箱",
             privacyNote: "系統將自動開啟您的郵件軟體。您的 Email 僅用於本次寄送紀錄。",
-            btnSend: "開啟郵件軟體", // 修改處：移除了 (填入文字報告)
+            btnSend: "開啟郵件軟體", 
             btnSending: "處理中...",
             sentTitle: "已開啟",
             sentDesc: "請在跳出的郵件視窗中確認內容並按下傳送。",
@@ -322,85 +382,39 @@
           }
         };
 
-        // --- Morandi Pro Palette ---
-        const STYLE_BLUE = { bg: 'bg-slate-50', border: 'border-slate-200 hover:border-blue-300', icon: 'text-slate-600', accent: 'border-t-4 border-t-slate-400' };
-        const STYLE_CYAN = { bg: 'bg-cyan-50/50', border: 'border-cyan-200 hover:border-cyan-400', icon: 'text-cyan-700', accent: 'border-t-4 border-t-cyan-500' };
-        const STYLE_SKY  = { bg: 'bg-sky-50/50', border: 'border-sky-200 hover:border-sky-400', icon: 'text-sky-700', accent: 'border-t-4 border-t-sky-500' };
-        const STYLE_VIOLET = { bg: 'bg-violet-50/60', border: 'border-violet-200 hover:border-violet-400', icon: 'text-violet-700', accent: 'border-t-4 border-t-violet-500' };
-        const STYLE_ROSE = { bg: 'bg-rose-50/50', border: 'border-rose-200 hover:border-rose-400', icon: 'text-rose-700', accent: 'border-t-4 border-t-rose-500' };
-        const STYLE_PINK = { bg: 'bg-pink-50/50', border: 'border-pink-200 hover:border-pink-400', icon: 'text-pink-700', accent: 'border-t-4 border-t-pink-500' };
-        const STYLE_FUCHSIA = { bg: 'bg-fuchsia-50/50', border: 'border-fuchsia-200 hover:border-fuchsia-400', icon: 'text-fuchsia-700', accent: 'border-t-4 border-t-fuchsia-500' };
-        const STYLE_ORANGE = { bg: 'bg-orange-50/60', border: 'border-orange-200 hover:border-orange-400', icon: 'text-orange-700', accent: 'border-t-4 border-t-orange-500' };
-        const STYLE_EMERALD = { bg: 'bg-emerald-50/60', border: 'border-emerald-200 hover:border-emerald-400', icon: 'text-emerald-700', accent: 'border-t-4 border-t-emerald-500' };
-        const STYLE_STONE = { bg: 'bg-stone-100/60', border: 'border-stone-300 hover:border-stone-400', icon: 'text-stone-600', accent: 'border-t-4 border-t-stone-500' };
-        const STYLE_TEAL = { bg: 'bg-teal-50/60', border: 'border-teal-200 hover:border-teal-400', icon: 'text-teal-700', accent: 'border-t-4 border-t-teal-500' };
-        const STYLE_RED = { bg: 'bg-red-50/60', border: 'border-red-200 hover:border-red-400', icon: 'text-red-700', accent: 'border-t-4 border-t-red-500' };
-        const STYLE_AMBER = { bg: 'bg-amber-50/60', border: 'border-amber-200 hover:border-amber-400', icon: 'text-amber-700', accent: 'border-t-4 border-t-amber-500' };
-
-        const initialCanvasDataStructure = {
-          keyPartners: { id: 'keyPartners', style: STYLE_CYAN, items: [] },
-          keyActivities: { id: 'keyActivities', style: STYLE_SKY, items: [] },
-          keyResources: { id: 'keyResources', style: STYLE_BLUE, items: [] },
-          valuePropositions: { id: 'valuePropositions', style: STYLE_VIOLET, items: [] },
-          customerRelationships: { id: 'customerRelationships', style: STYLE_FUCHSIA, items: [] },
-          channels: { id: 'channels', style: STYLE_PINK, items: [] },
-          customerSegments: { id: 'customerSegments', style: STYLE_ROSE, items: [] },
-          costStructure: { id: 'costStructure', style: STYLE_ORANGE, items: [] },
-          revenueStreams: { id: 'revenueStreams', style: STYLE_EMERALD, items: [] },
-          envCost: { id: 'envCost', style: STYLE_STONE, items: [] },
-          envBenefit: { id: 'envBenefit', style: STYLE_TEAL, items: [] },
-          socCost: { id: 'socCost', style: STYLE_RED, items: [] },
-          socBenefit: { id: 'socBenefit', style: STYLE_AMBER, items: [] }
-        };
-
-        const geminiCall = async (prompt, isJson = false) => {
-            if (!apiKey) {
-                alert("請填入 API Key！\n\n(如果是開發者，請在程式碼的 const apiKey 變數中填入您的金鑰)");
-                return "";
-            }
-            await checkAndIncrementUsage();
-            try {
-                const payload = { contents: [{ parts: [{ text: prompt }] }] };
-                if (isJson) payload.generationConfig = { responseMimeType: "application/json" };
-                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                const data = await response.json();
-                
-                if (data.error) {
-                    if (data.error.message && data.error.message.includes("referer")) {
-                        throw new Error(`⚠️ API Key 受限\n\n您的 API Key 設定了 HTTP Referrer 限制，但目前的網址不在允許清單中。\n\n請將以下網址加入 Google Cloud Console 白名單：\n${window.location.origin}/*\n\n或者暫時將限制設為「無 (None)」。`);
-                    }
-                    throw new Error(data.error.message);
-                }
-                
-                let text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-                if (isJson) {
-                    text = text.replace(/```json/g, '').replace(/```/g, '').trim();
-                    try {
-                        const start = text.indexOf('{'); const end = text.lastIndexOf('}');
-                        if(start !== -1 && end !== -1) return JSON.parse(text.substring(start, end+1));
-                        const startArr = text.indexOf('['); const endArr = text.lastIndexOf(']');
-                        if(startArr !== -1 && endArr !== -1) return JSON.parse(text.substring(startArr, endArr+1));
-                    } catch(e) {} 
-                }
-                return text;
-            } catch (err) { console.error(err); alert(err.message); throw err; }
-        };
-
         // --- 組件 ---
 
         const InstructionCard = ({ t }) => {
             const [isOpen, setIsOpen] = useState(false); 
             if (!isOpen) return (<div className="max-w-[1440px] mx-auto mb-4 flex justify-end no-print"><button onClick={() => setIsOpen(true)} className="flex items-center gap-2 px-3 py-1.5 bg-white text-indigo-600 text-xs font-medium rounded-full shadow-sm hover:bg-indigo-50 border border-indigo-100 transition-all"><HelpCircle size={14} /> {t.instructionShow}</button></div>);
             return (
-                <div className="max-w-[1440px] mx-auto mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-4 shadow-sm relative animate-fadeIn no-print">
-                    <button onClick={() => setIsOpen(false)} className="absolute top-2 right-2 text-blue-400 hover:text-blue-600 p-1 rounded-full hover:bg-blue-100/50 transition-colors"><ChevronUp size={18} /></button>
-                    <h3 className="text-blue-800 font-bold text-sm mb-3 flex items-center gap-2"><HelpCircle size={16}/> {t.instructionTitle}</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm text-blue-900/80">
-                        <div className="flex items-start gap-3 bg-white/60 p-3 rounded-lg border border-blue-100"><div className="bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold">1</div><div><span className="font-bold text-blue-800 block mb-1">{t.step1Title}</span>{t.step1Desc}</div></div>
-                        <div className="flex items-start gap-3 bg-white/60 p-3 rounded-lg border border-blue-100"><div className="bg-purple-600 text-white w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold">2</div><div><span className="font-bold text-purple-800 block mb-1">{t.step2Title}</span>{t.step2Desc}</div></div>
-                        <div className="flex items-start gap-3 bg-white/60 p-3 rounded-lg border border-blue-100"><div className="bg-emerald-600 text-white w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold">3</div><div><span className="font-bold text-emerald-800 block mb-1">{t.step3Title}</span>{t.step3Desc}</div></div>
-                        <div className="flex items-start gap-3 bg-white/60 p-3 rounded-lg border border-blue-100"><div className="bg-red-500 text-white w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold">!</div><div><span className="font-bold text-red-800 block mb-1">{t.quotaTitle}</span>{t.quotaDesc}</div></div>
+                <div className="max-w-[1440px] mx-auto mb-6 no-print">
+                    <div className="mb-2 px-4 py-2 bg-red-50 border border-red-200 text-red-600 text-xs rounded-lg flex items-center justify-center gap-2">
+                        <AlertTriangle size={14} />
+                        ⚠️ 本商業模式畫布使用免費 AI 系統，若遇到 AI 無法正常操作，通常為系統忙碌造成，請稍待幾分鐘後再重新使用。
                     </div>
+                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-4 shadow-sm relative animate-fadeIn">
+                        <button onClick={() => setIsOpen(false)} className="absolute top-2 right-2 text-blue-400 hover:text-blue-600 p-1 rounded-full hover:bg-blue-100/50 transition-colors"><ChevronUp size={18} /></button>
+                        <h3 className="text-blue-800 font-bold text-sm mb-3 flex items-center gap-2"><HelpCircle size={16}/> {t.instructionTitle}</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm text-blue-900/80">
+                            <div className="flex items-start gap-3 bg-white/60 p-3 rounded-lg border border-blue-100"><div className="bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold">1</div><div><span className="font-bold text-blue-800 block mb-1">{t.step1Title}</span>{t.step1Desc}</div></div>
+                            <div className="flex items-start gap-3 bg-white/60 p-3 rounded-lg border border-blue-100"><div className="bg-purple-600 text-white w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold">2</div><div><span className="font-bold text-purple-800 block mb-1">{t.step2Title}</span>{t.step2Desc}</div></div>
+                            <div className="flex items-start gap-3 bg-white/60 p-3 rounded-lg border border-blue-100"><div className="bg-emerald-600 text-white w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold">3</div><div><span className="font-bold text-emerald-800 block mb-1">{t.step3Title}</span>{t.step3Desc}</div></div>
+                            <div className="flex items-start gap-3 bg-white/60 p-3 rounded-lg border border-blue-100"><div className="bg-red-500 text-white w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold">!</div><div><span className="font-bold text-red-800 block mb-1">{t.quotaTitle}</span>{t.quotaDesc}</div></div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const ResetModal = ({ isOpen, onClose, onConfirmSave, onConfirmClear, t }) => {
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[10002] p-4">
+                     <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 animate-fadeIn relative">
+                        <div className="text-center mb-6"><div className="inline-flex items-center justify-center w-12 h-12 bg-red-100 rounded-full mb-3 text-red-600"><AlertTriangle size={24} /></div><h2 className="text-xl font-bold text-gray-800">{t.resetModalTitle}</h2><p className="text-sm text-gray-500 mt-1">{t.resetModalDesc}</p></div>
+                        <div className="flex flex-col gap-3"><button onClick={onConfirmClear} className="w-full py-3 bg-white border border-red-200 text-red-600 rounded-lg font-bold hover:bg-red-50 flex items-center justify-center gap-2"><Trash2 size={18}/> {t.btnClearOnly}</button><button onClick={onClose} className="w-full py-2 text-gray-500 hover:bg-gray-100 rounded-lg text-sm">{t.btnCancel}</button></div>
+                     </div>
                 </div>
             );
         };
@@ -411,7 +425,7 @@
             const layers = { biz: ['keyPartners', 'keyActivities', 'keyResources', 'valuePropositions', 'customerRelationships', 'channels', 'customerSegments'], eco: ['costStructure', 'revenueStreams'], env: ['envCost', 'envBenefit'], soc: ['socCost', 'socBenefit'] };
             const currentSectionInfo = t.sections[selectedSection];
             const displayDesc = customGuides?.[selectedSection]?.description || currentSectionInfo.desc;
-            const displayPrompt = customGuides?.[selectedSection]?.promptGuide || initialCanvasDataStructure[selectedSection].promptGuide;
+            const displayPrompt = customGuides?.[selectedSection]?.promptGuide || getInitialCanvasData()[selectedSection].promptGuide;
             return (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[10000] p-4">
                     <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[80vh] animate-fadeIn relative flex overflow-hidden">
@@ -554,7 +568,16 @@
         };
 
         const BrandModal = ({ isOpen, onClose, onSelect, t }) => {
-            const brands = ["Tesla", "Uber", "Netflix", "Airbnb", "Starbucks", "IKEA", "Apple", "Nike"];
+            const brands = [
+                { name: "Tesla", icon: "⚡" },
+                { name: "Uber", icon: "🚗" },
+                { name: "Netflix", icon: "🎬" },
+                { name: "Airbnb", icon: "🏠" },
+                { name: "Starbucks", icon: "☕" },
+                { name: "IKEA", icon: "🪑" },
+                { name: "Apple", icon: "🍎" },
+                { name: "Nike", icon: "👟" }
+            ];
             const [custom, setCustom] = useState('');
             if(!isOpen) return null;
             return (
@@ -563,7 +586,7 @@
                         <button onClick={onClose} className="absolute top-4 right-4 text-gray-400"><X size={20}/></button>
                         <h2 className="text-xl font-bold mb-4 text-center">{t.brandModalTitle}</h2>
                         <div className="flex gap-2 mb-6"><input placeholder={t.searchPlaceholder} className="flex-1 p-2 border rounded" value={custom} onChange={e=>setCustom(e.target.value)} /><button onClick={()=>{onSelect(custom); onClose();}} className="px-4 bg-indigo-600 text-white rounded font-bold">{t.btnAnalyze}</button></div>
-                        <div className="grid grid-cols-4 gap-3">{brands.map(b=>(<button key={b} onClick={()=>{onSelect(b); onClose();}} className="p-3 border rounded hover:bg-gray-50 font-bold">{b}</button>))}</div>
+                        <div className="grid grid-cols-4 gap-3">{brands.map(b=>(<button key={b.name} onClick={()=>{onSelect(b.name); onClose();}} className="p-3 border border-gray-200 rounded-xl hover:bg-indigo-50 hover:border-indigo-200 flex flex-col items-center gap-2 transition-all"><span className="text-2xl">{b.icon}</span><span className="font-bold text-gray-700 text-sm">{b.name}</span></button>))}</div>
                     </div>
                 </div>
             );
@@ -601,7 +624,7 @@
                         <button onClick={onClose} className="absolute top-4 right-4 text-gray-400"><X size={20}/></button>
                         <h3 className="text-xl font-bold mb-4 text-indigo-600">{t.topicHelp}</h3>
                         <div className="mb-4"><h4 className="font-bold">{section.title}</h4><p className="text-gray-600">{customInfo?.description || section.desc}</p></div>
-                        <div className="bg-indigo-50 p-3 rounded text-sm text-indigo-800">{customInfo?.promptGuide || initialCanvasDataStructure[sectionId].promptGuide}</div>
+                        <div className="bg-indigo-50 p-3 rounded text-sm text-indigo-800">{customInfo?.promptGuide || getInitialCanvasData()[sectionId].promptGuide}</div>
                     </div>
                 </div>
             );
@@ -663,7 +686,7 @@
         };
 
         export default function BusinessCanvasAI() {
-          const [canvasData, setCanvasData] = useState(initialCanvasDataStructure); 
+          const [canvasData, setCanvasData] = useState(getInitialCanvasData()); 
           const [activeSection, setActiveSection] = useState(null);
           const [newItemText, setNewItemText] = useState('');
           const [businessContext, setBusinessContext] = useState('');
@@ -676,6 +699,7 @@
           const [isContextModalOpen, setIsContextModalOpen] = useState(false);
           const [brandModalOpen, setBrandModalOpen] = useState(false); 
           const [isEmailModalOpen, setIsEmailModalOpen] = useState(false); 
+          const [resetModalOpen, setResetModalOpen] = useState(false); // State for ResetModal
           const [encyclopediaOpen, setEncyclopediaOpen] = useState(false);
           const [topicGuide, setTopicGuide] = useState({ isOpen: false, sectionId: null });
           const [consultant, setConsultant] = useState({ isOpen: false, mode: 'global', sectionId: null });
@@ -695,14 +719,27 @@
             return () => window.removeEventListener('usageUpdated', handleUpdate);
           }, []);
 
-          // 徹底的重置功能
-          const handleFullReset = () => {
-              if (!confirm(t.resetModalDesc)) return;
-              setCanvasData(initialCanvasDataStructure);
+          // 真正的重置邏輯
+          const performReset = () => {
+              // 1. 重置所有 React State
+              setCanvasData(getInitialCanvasData());
               setBusinessContext('');
               setCustomGuides({});
               setAiSuggestions(null);
               setApiError('');
+              
+              // 2. 清除本地儲存
+              localStorage.removeItem('business_canvas_v1_data');
+              localStorage.removeItem('business_canvas_v1_context');
+              localStorage.removeItem('business_canvas_v1_guides');
+              
+              // 3. 關閉視窗
+              setResetModalOpen(false); 
+          };
+          
+          // 處理重置確認
+          const handleConfirmClear = () => {
+              performReset();
           };
 
           const handleAddItem = (sectionId, text) => { if (!text || !text.trim()) return; setCanvasData(prev => ({ ...prev, [sectionId]: { ...prev[sectionId], items: [...prev[sectionId].items, { id: Date.now() + Math.random(), text: text.trim() }] } })); setNewItemText(''); };
@@ -728,7 +765,7 @@
               if (!brandName) return;
               setIsBrandAnalyzing(true); setApiError('');
               setBusinessContext(brandName); 
-              const keys = Object.keys(initialCanvasDataStructure);
+              const keys = Object.keys(getInitialCanvasData()); // Use factory
               const prompt = `Analyze "${brandName}". Generate full BMC. Return JSON. Keys: ${keys.join(',')}. Values: Array of 3 strings. Lang: ${lang==='zh'?'Traditional Chinese':'English'}.`;
               try {
                   const result = await geminiCall(prompt, true);
@@ -750,10 +787,32 @@
 
           const sectionProps = { canvasData, activeSection, setActiveSection, newItemText, setNewItemText, handleAddItem, handleDeleteItem, openConsultant, openItemRefiner, aiSuggestions, setAiSuggestions, openTopicGuide, t, customGuides };
 
+          // Persistence Hook
+          useEffect(() => {
+            const savedData = localStorage.getItem('business_canvas_v1_data');
+            const savedContext = localStorage.getItem('business_canvas_v1_context');
+            const savedGuides = localStorage.getItem('business_canvas_v1_guides');
+            
+            if (savedData) {
+                try { setCanvasData(JSON.parse(savedData)); } catch(e) {}
+            }
+            if (savedContext) setBusinessContext(savedContext);
+            if (savedGuides) {
+                try { setCustomGuides(JSON.parse(savedGuides)); } catch(e) {}
+            }
+          }, []);
+
+          useEffect(() => {
+            localStorage.setItem('business_canvas_v1_data', JSON.stringify(canvasData));
+            localStorage.setItem('business_canvas_v1_context', businessContext);
+            localStorage.setItem('business_canvas_v1_guides', JSON.stringify(customGuides));
+          }, [canvasData, businessContext, customGuides]);
+
           return (
             <div className="min-h-screen bg-[#F3F4F6] p-2 md:p-6 font-sans text-slate-800">
               <ContextModal isOpen={isContextModalOpen} onClose={() => setIsContextModalOpen(false)} value={businessContext} onChange={setBusinessContext} t={t} lang={lang} onStart={handlePersonalizeGuides} />
               <EmailModal isOpen={isEmailModalOpen} onClose={() => setIsEmailModalOpen(false)} canvasData={canvasData} t={t} context={businessContext} />
+              <ResetModal isOpen={resetModalOpen} onClose={() => setResetModalOpen(false)} onConfirmSave={null} onConfirmClear={handleConfirmClear} t={t} />
               <AiConsultantModal isOpen={consultant.isOpen} onClose={() => setConsultant({ ...consultant, isOpen: false })} mode={consultant.mode} sectionId={consultant.sectionId} context={businessContext} canvasData={canvasData} onComplete={(res, mode)=>{ if(mode==='global'){ setCanvasData(prev => { const n={...prev}; Object.keys(res).forEach(k=>{ if(n[k]) n[k].items = res[k].map(t=>({id:Date.now()+Math.random(), text:t})) }); return n; }); } else { setAiSuggestions({ sectionId: consultant.sectionId, items: res }); } }} t={t} lang={lang} />
               <ItemRefineModal isOpen={itemRefiner.isOpen} onClose={() => setItemRefiner({ ...itemRefiner, isOpen: false })} item={itemRefiner.item} context={businessContext} sectionTitle={itemRefiner.sectionTitle} onSave={saveRefinedItem} t={t} lang={lang} />
               <BrandModal isOpen={brandModalOpen} onClose={() => setBrandModalOpen(false)} onSelect={handleBrandAnalysis} t={t} />
@@ -798,7 +857,7 @@
                      <button onClick={()=>setBrandModalOpen(true)} className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm hover:bg-gray-50 flex items-center gap-2 text-gray-700 font-medium shrink-0"><Building2 size={16}/> {t.brandCases}</button>
                      <button onClick={()=>openConsultant('global')} className="px-4 py-2 bg-slate-800 text-white rounded-lg shadow hover:bg-slate-900 flex items-center gap-2 font-bold transition-transform hover:scale-105 active:scale-95 shrink-0"><Wand2 size={16}/> {t.generateOneClick}</button>
                      <div className="w-px h-8 bg-gray-200 mx-1 shrink-0"></div>
-                     <button onClick={handleFullReset} className="p-2 hover:bg-red-50 hover:text-red-500 rounded text-gray-400 shrink-0" title={t.reset}><RotateCcw size={18}/></button>
+                     <button onClick={() => setResetModalOpen(true)} className="p-2 hover:bg-red-50 hover:text-red-500 rounded text-gray-400" title={t.reset}><RotateCcw size={16}/></button>
                 </div>
               </header>
 
