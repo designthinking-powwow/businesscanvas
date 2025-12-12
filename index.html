@@ -64,19 +64,15 @@
 
     <script type="text/babel" data-type="module">
         // =================================================================================
-        //  System Configuration
+        //  System Configuration (User Controlled)
         // =================================================================================
         
-        // Default API Key (Restricted Domain)
-        const defaultGeminiPartA = "AIzaSyCX1cbTs_zUL"; 
-        const defaultGeminiPartB = "X3us7I__nGOSgsoL0MIoJc";
-        const defaultApiKey = defaultGeminiPartA + defaultGeminiPartB; 
+        // 1. Gemini API Key
+        // 為了安全，此處留空。使用者需在網頁介面上的「設定」中自行輸入 Key 才能使用 AI 功能。
+        const defaultApiKey = ""; 
         
-        // ⚠️ Security Warning for Source Code Viewers:
-        // This API Key has strict HTTP Referrer restrictions configured in Google Cloud Console.
-        // Copying this key to other websites or local environments will NOT work (Returns 403 Forbidden).
-
-        // Firebase Config
+        // 2. Firebase Config
+        // 已恢復為原本設定，用於收集客戶名單
         const fbKeyPartA = "AIzaSyAhik_XEzS1Zh";
         const fbKeyPartB = "NRSEtziAB61ZBqazbxkJg";
         const firebaseConfig = {
@@ -101,65 +97,29 @@
         import { getFirestore, doc, getDoc, updateDoc, increment, setDoc, addDoc, collection, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
         import { getAuth, signInAnonymously } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 
-        // FIXED: Corrected destructuring syntax (Image: ImageIcon instead of Image as ImageIcon)
         const { 
             Plus, X, Trash2, Layout, RotateCcw, Sparkles, Lightbulb, MessageSquare, 
             Loader2, Settings, Leaf, Heart, Coins, Wand2, HelpCircle, ChevronUp, 
             ClipboardCheck, AlertTriangle, CheckCircle2, Mail, 
             Send, FileText, ShieldCheck, MessageCircleQuestion, Edit3, Bot, 
             Building2, Globe, Lock, Briefcase, BookOpen, ToggleLeft, ToggleRight, Activity, AlertCircle, Copy,
-            Upload, Save, Search, Download, Key, Image: ImageIcon, FileText: FileIcon
+            Upload, Save, Search, Download, Key, Image: ImageIcon, FileText: FileIcon, ExternalLink
         } = LucideReact;
 
         // --- Firebase Initialization ---
         let db = null;
         let auth = null;
-        if (firebaseConfig) {
+        // 只有當使用者在程式碼中填入了有效的 apiKey 時才初始化 Firebase
+        if (firebaseConfig && firebaseConfig.apiKey && firebaseConfig.apiKey.length > 5) {
             try {
                 const app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
                 signInAnonymously(auth).catch((error) => console.error("Firebase Auth Error:", error));
-            } catch (e) { console.warn("Firebase Init Error:", e); }
+            } catch (e) { console.warn("Firebase Init Error (Running in Offline Mode):", e); }
         }
 
         // --- Utils ---
-        const checkAndIncrementUsage = async () => {
-            const today = new Date().toISOString().slice(0, 10);
-            if (db) {
-                const docRef = doc(db, "usage_stats", today);
-                try {
-                     updateDoc(docRef, { count: increment(1) }).catch(() => { setDoc(docRef, { count: 1 }).catch(() => {}); });
-                } catch (e) {}
-            }
-            const LOCAL_KEY = 'local_usage_stats';
-            const stored = localStorage.getItem(LOCAL_KEY);
-            let stats = { date: today, count: 0 };
-            if (stored) {
-                try {
-                    const parsed = JSON.parse(stored);
-                    if (parsed.date === today) {
-                        stats = parsed; 
-                    }
-                } catch(e) {}
-            }
-            if (stats.count >= LOCAL_DAILY_LIMIT) throw new Error(`本日免費額度 (${LOCAL_DAILY_LIMIT}次) 已用完，請明日再來！`);
-            stats.count += 1; 
-            localStorage.setItem(LOCAL_KEY, JSON.stringify(stats));
-            window.dispatchEvent(new Event('usageUpdated'));
-            return true;
-        };
-
-        const getLocalUsage = () => {
-            const today = new Date().toISOString().slice(0, 10);
-            const stored = localStorage.getItem('local_usage_stats');
-            if (stored) {
-                const parsed = JSON.parse(stored);
-                if (parsed.date === today) return parsed.count;
-            }
-            return 0;
-        };
-
         const cleanJson = (text) => {
             return text.replace(/```json/g, '').replace(/```/g, '').trim();
         };
@@ -197,10 +157,7 @@
 
         const geminiCall = async (prompt, isJson = false, customKey = null) => {
             const keyToUse = customKey || defaultApiKey;
-            if (!keyToUse) throw new Error("API Key Missing");
-            
-            // Only check local quota if using default key
-            if (!customKey) await checkAndIncrementUsage();
+            if (!keyToUse) throw new Error("API_KEY_MISSING");
             
             const maxRetries = 5; 
             let lastError = null;
@@ -223,15 +180,12 @@
                     
                     clearTimeout(timeoutId);
 
-                    if (response.status === 403) throw new Error("API Key 權限不足 (403)。如果您在自己的網站使用，請在「設定」中輸入您自己的 API Key。");
+                    if (response.status === 403) throw new Error("API Key 權限不足 (403)。請檢查您的 Key 是否正確。");
                     if (response.status === 429) throw new Error("API 請求過於頻繁 (429)，請稍候再試。");
                     if (response.status === 503) throw new Error("AI 模型忙碌中 (503)，請稍候。");
                     
                     const data = await response.json();
                     if (data.error) {
-                         if (data.error.message && data.error.message.includes("referer")) {
-                            throw new Error(`⚠️ API Key 網域受限\n請點擊右上角「設定」，輸入您自己的 Gemini API Key 以解除限制。`);
-                        }
                         throw new Error(data.error.message);
                     }
                     
@@ -276,17 +230,14 @@
             encyclopediaBtn: "商業百科",
             modeStandard: "標準模式",
             modeSustainable: "永續模式",
-            usageTitle: "今日額度",
-            aiWarning: "⚠️ 溫馨提醒：本工具使用免費 AI 資源，若遇繁忙請稍候再試；您亦可點擊上方「設定 API Key」使用個人金鑰，以獲得更穩定的體驗。",
-            quotaTitle: "4. 免費額度限制",
-            quotaDesc: "本工具為免費提供，設有每日使用上限。如果您收到通知，表示已超過每日額度，請明日再試。",
+            aiWarning: "⚠️ 溫馨提醒：本工具目前需使用自定義 API Key 才能啟用 AI 功能。若無 Key，您仍可完全免費使用所有手動編輯、匯出功能。",
             instructionTitle: "如何使用本工具：",
-            step1Title: "1. 設定主題",
-            step1Desc: "點擊左上角的「設定主題」，AI 會根據您的行業自動改寫引導文字。",
+            step1Title: "1. 設定 API Key (選填)",
+            step1Desc: "點擊右上角設定，輸入 Gemini API Key 即可解鎖 AI 腦力激盪功能。",
             step2Title: "2. 智能發想",
             step2Desc: "使用區塊下方的「AI 靈感」快速生成內容。點擊便條紙可使用 AI 優化。",
             step3Title: "3. 診斷與分享",
-            step3Desc: "使用「商業診斷」找出盲點，完成後可將報告寄至 Email 保存。",
+            step3Desc: "使用「商業診斷」找出盲點，完成後可將報告匯出保存。",
             aiConsultantTitle: "AI 創業導師想了解...",
             aiConsultantDesc: "請回答幾個簡單問題，讓我為您構思。",
             submitAndGenerate: "好了，幫我生成畫布！",
@@ -339,9 +290,12 @@
             topicHelp: "定義",
             definition: "定義",
             thinkingDirection: "思考方向",
-            settingsTitle: "系統設定",
-            apiKeyLabel: "自定義 Gemini API Key",
-            apiKeyDesc: "🔑 安全性說明：您的 API Key 僅會儲存在您自己的瀏覽器中，並直接發送至 Google 伺服器，不會經過任何第三方主機，請安心使用。",
+            settingsTitle: "設定 API Key",
+            apiKeyLabel: "輸入 Gemini API Key",
+            apiKeyDesc: "🔑 您的 API Key 僅儲存於本地瀏覽器，直接傳送至 Google，絕不經手第三方伺服器，請安心使用。若不輸入，您仍可使用手動模式。",
+            apiKeyGuide: "如何獲取 API Key？",
+            apiKeyLinkText: "前往 Google AI Studio 申請 (免費)",
+            apiKeyWarning: "⚠️ 警語：API Key 等同於您的密碼，請勿將其截圖或傳送給他人。",
             save: "儲存設定",
             setupApiKey: "設定 API Key",
             sections: {
@@ -373,17 +327,14 @@
             encyclopediaBtn: "Encyclopedia",
             modeStandard: "Standard",
             modeSustainable: "Sustainable",
-            usageTitle: "Daily Limit",
-            aiWarning: "⚠️ Note: Using free AI resources. If busy, try again later. You can also set your own API Key above for better stability.",
-            quotaTitle: "4. Daily Quota",
-            quotaDesc: "This tool is free with a daily usage limit. Please try again tomorrow if you hit the limit.",
+            aiWarning: "⚠️ Note: AI features require your own API Key. Without a key, you can still use all manual features for free.",
             instructionTitle: "How to use:",
-            step1Title: "1. Setup Topic",
-            step1Desc: "Click 'Set Topic' in the header. AI will customize guides for you.",
+            step1Title: "1. Set API Key (Optional)",
+            step1Desc: "Enter your Gemini API Key in Settings to unlock AI brainstorming features.",
             step2Title: "2. AI Brainstorm",
             step2Desc: "Use 'AI Spark' below sections to generate content. Click items to refine.",
             step3Title: "3. Diagnose & Share",
-            step3Desc: "Use 'Diagnosis' to find blind spots, then email the report.",
+            step3Desc: "Use 'Diagnosis' to find blind spots, then export the report.",
             aiConsultantTitle: "AI Consultant needs details...",
             aiConsultantDesc: "Answer a few questions to help me brainstorm.",
             submitAndGenerate: "Ready, Generate Canvas!",
@@ -438,7 +389,10 @@
             thinkingDirection: "Thinking Direction",
             settingsTitle: "Settings",
             apiKeyLabel: "Custom Gemini API Key",
-            apiKeyDesc: "🔑 Security Note: Your API Key is stored only in your browser and sent directly to Google servers. It does not pass through any third-party servers.",
+            apiKeyDesc: "🔑 Security Note: Your Key is stored locally and sent directly to Google. It never passes through 3rd-party servers. Manual mode is available without a key.",
+            apiKeyGuide: "How to get API Key?",
+            apiKeyLinkText: "Get from Google AI Studio (Free)",
+            apiKeyWarning: "⚠️ Warning: Treat your API Key like a password. Do not share it.",
             save: "Save",
             setupApiKey: "Set API Key",
             sections: {
@@ -462,11 +416,11 @@
 
         // --- Modals ---
 
+        // Improved InstructionCard - Removed Quota
         const InstructionCard = ({ t }) => {
             const [isOpen, setIsOpen] = useState(false); 
-            const QuotaBar = (<div className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-bold shrink-0 ${getLocalUsage()>=LOCAL_DAILY_LIMIT?"bg-red-50 text-red-600 border-red-200":"bg-emerald-50 text-emerald-600 border-emerald-200"}`}title={t.quotaDesc}><Activity size={14}/><span>{getLocalUsage()}/{LOCAL_DAILY_LIMIT}</span>{getLocalUsage()>=LOCAL_DAILY_LIMIT&&<AlertCircle size={14}className="text-red-600 animate-pulse ml-1"/>}</div>);
-            if(!isOpen) return (<div className="max-w-[1440px] mx-auto mb-6 no-print flex justify-end items-center gap-2">{QuotaBar}<button onClick={()=>setIsOpen(true)}className="flex items-center gap-2 px-3 py-1.5 bg-white text-indigo-600 text-xs font-medium rounded-full shadow-sm hover:bg-indigo-50 border border-indigo-100 transition-all"><HelpCircle size={14}/> {t.instructionShow}</button></div>);
-            return (<div className="max-w-[1440px] mx-auto mb-6 no-print"><div className="flex flex-col gap-2"><div className="flex justify-end items-center gap-2 mb-2">{QuotaBar}<button onClick={()=>setIsOpen(false)}className="flex items-center gap-2 px-3 py-1.5 bg-white text-indigo-600 text-xs font-medium rounded-full shadow-sm hover:bg-indigo-50 border border-indigo-100 transition-all"><ChevronUp size={14}/> {t.instructionHide}</button></div><div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-4 shadow-sm relative animate-fadeIn"><h3 className="text-blue-800 font-bold text-sm mb-3 flex items-center gap-2"><HelpCircle size={16}/> {t.instructionTitle}</h3><div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm text-blue-900/80"><div className="flex items-start gap-3 bg-white/60 p-3 rounded-lg border border-blue-100"><div className="bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold">1</div><div><span className="font-bold text-blue-800 block mb-1">{t.step1Title}</span>{t.step1Desc}</div></div><div className="flex items-start gap-3 bg-white/60 p-3 rounded-lg border border-blue-100"><div className="bg-purple-600 text-white w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold">2</div><div><span className="font-bold text-purple-800 block mb-1">{t.step2Title}</span>{t.step2Desc}</div></div><div className="flex items-start gap-3 bg-white/60 p-3 rounded-lg border border-blue-100"><div className="bg-emerald-600 text-white w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold">3</div><div><span className="font-bold text-emerald-800 block mb-1">{t.step3Title}</span>{t.step3Desc}</div></div><div className="flex items-start gap-3 bg-white/60 p-3 rounded-lg border border-blue-100"><div className="bg-red-500 text-white w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold">!</div><div><span className="font-bold text-red-800 block mb-1">{t.quotaTitle}</span>{t.quotaDesc}</div></div></div></div></div></div>);
+            if(!isOpen) return (<div className="max-w-[1440px] mx-auto mb-6 no-print flex justify-end items-center gap-2"><button onClick={()=>setIsOpen(true)}className="flex items-center gap-2 px-3 py-1.5 bg-white text-indigo-600 text-xs font-medium rounded-full shadow-sm hover:bg-indigo-50 border border-indigo-100 transition-all"><HelpCircle size={14}/> {t.instructionShow}</button></div>);
+            return (<div className="max-w-[1440px] mx-auto mb-6 no-print"><div className="flex flex-col gap-2"><div className="flex justify-end items-center gap-2 mb-2"><button onClick={()=>setIsOpen(false)}className="flex items-center gap-2 px-3 py-1.5 bg-white text-indigo-600 text-xs font-medium rounded-full shadow-sm hover:bg-indigo-50 border border-indigo-100 transition-all"><ChevronUp size={14}/> {t.instructionHide}</button></div><div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-4 shadow-sm relative animate-fadeIn"><h3 className="text-blue-800 font-bold text-sm mb-3 flex items-center gap-2"><HelpCircle size={16}/> {t.instructionTitle}</h3><div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-blue-900/80"><div className="flex items-start gap-3 bg-white/60 p-3 rounded-lg border border-blue-100"><div className="bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold">1</div><div><span className="font-bold text-blue-800 block mb-1">{t.step1Title}</span>{t.step1Desc}</div></div><div className="flex items-start gap-3 bg-white/60 p-3 rounded-lg border border-blue-100"><div className="bg-purple-600 text-white w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold">2</div><div><span className="font-bold text-purple-800 block mb-1">{t.step2Title}</span>{t.step2Desc}</div></div><div className="flex items-start gap-3 bg-white/60 p-3 rounded-lg border border-blue-100"><div className="bg-emerald-600 text-white w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold">3</div><div><span className="font-bold text-emerald-800 block mb-1">{t.step3Title}</span>{t.step3Desc}</div></div></div></div></div></div>);
         };
 
         const ResetModal = ({ isOpen, onClose, onConfirmClear, t }) => {
@@ -476,11 +430,19 @@
 
         const SettingsModal = ({ isOpen, onClose, apiKey, setApiKey, t }) => {
             const [keyInput, setKeyInput] = useState(apiKey);
+            // NEW: Add a toast notification state for save confirmation
+            const [showSaved, setShowSaved] = useState(false);
+            
             useEffect(() => { setKeyInput(apiKey); }, [apiKey, isOpen]);
             
             const handleSave = () => {
                 setApiKey(keyInput);
-                onClose();
+                setShowSaved(true);
+                // Close after a brief delay so user sees "Saved!"
+                setTimeout(() => {
+                    setShowSaved(false);
+                    onClose();
+                }, 1000);
             };
 
             if (!isOpen) return null;
@@ -490,14 +452,32 @@
                         <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={20} /></button>
                         <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-indigo-600"><Settings size={20}/> {t.settingsTitle}</h2>
                         <div className="space-y-4">
+                            
+                            {/* Guide Section */}
+                            <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-sm text-blue-800">
+                                <h4 className="font-bold mb-1 flex items-center gap-1"><HelpCircle size={14}/> {t.apiKeyGuide}</h4>
+                                <a href="https://aistudio.google.com/app/apikey" target="_blank" className="flex items-center gap-1 text-blue-600 underline hover:text-blue-800">
+                                    {t.apiKeyLinkText} <ExternalLink size={12}/>
+                                </a>
+                            </div>
+
                             <div>
                                 <label className="block text-sm font-bold text-gray-700 mb-1">{t.apiKeyLabel}</label>
-                                <input type="password" value={keyInput} onChange={(e) => setKeyInput(e.target.value)} className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-mono" placeholder="AIza..." />
-                                <div className="mt-2 p-3 bg-blue-50 border border-blue-100 rounded-lg text-xs text-blue-800 leading-relaxed">
+                                <input type="password" value={keyInput} onChange={(e) => setKeyInput(e.target.value)} className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-mono" placeholder="AIza..." />
+                                <div className="mt-2 text-xs text-gray-500 leading-relaxed">
                                     {t.apiKeyDesc}
                                 </div>
                             </div>
-                            <button onClick={handleSave} className="w-full py-2 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700">{t.save}</button>
+                            
+                            {/* Warning Section */}
+                            <div className="bg-red-50 border border-red-100 rounded-lg p-3 text-xs text-red-700 font-medium flex gap-2">
+                                <AlertTriangle size={16} className="shrink-0 mt-0.5"/>
+                                <span>{t.apiKeyWarning}</span>
+                            </div>
+
+                            <button onClick={handleSave} className={`w-full py-3 text-white rounded-lg font-bold shadow-sm transition-all flex items-center justify-center gap-2 ${showSaved ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
+                                {showSaved ? <><CheckCircle2 size={18}/> 設定已儲存！請重新點擊功能</> : t.save}
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -622,7 +602,20 @@
         };
 
         const BrandModal=({isOpen,onClose,onSelect,t})=>{const brands=[{name:"Tesla",icon:"⚡"},{name:"Uber",icon:"🚗"},{name:"Netflix",icon:"🎬"},{name:"Airbnb",icon:"🏠"},{name:"Starbucks",icon:"☕"},{name:"IKEA",icon:"🪑"},{name:"Apple",icon:"🍎"},{name:"Nike",icon:"👟"}];const[custom,setCustom]=useState('');if(!isOpen)return null;return(<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[10000] p-4"><div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl p-6 animate-fadeIn relative"><button onClick={onClose}className="absolute top-4 right-4 text-gray-400"><X size={20}/></button><h2 className="text-xl font-bold mb-4 text-center">{t.brandModalTitle}</h2><div className="flex gap-2 mb-6"><input placeholder={t.searchPlaceholder}className="flex-1 p-2 border rounded"value={custom}onChange={e=>setCustom(e.target.value)}/><button onClick={()=>{onSelect(custom);onClose();}}className="px-4 bg-indigo-600 text-white rounded font-bold">{t.btnAnalyze}</button></div><div className="grid grid-cols-4 gap-3">{brands.map(b=>(<button key={b.name}onClick={()=>{onSelect(b.name);onClose();}}className="p-3 border rounded hover:bg-gray-50 font-bold flex flex-col items-center gap-1"><span className="text-2xl">{b.icon}</span><span className="text-sm">{b.name}</span></button>))}</div></div></div>);};
-        const ItemRefineModal=({isOpen,onClose,item,context,sectionTitle,onSave,t,lang,customApiKey})=>{if(!isOpen)return null;const[text,setText]=useState('');const[loading,setLoading]=useState(false);useEffect(()=>{if(isOpen&&item)setText(typeof item.text==='string'?item.text:JSON.stringify(item.text));},[isOpen,item]);const run=async(act)=>{setLoading(true);try{const res=await geminiCall(`Context:${context}. Section:${sectionTitle}. Text:${text}. Action:${act}. Lang:${lang==='zh'?'Traditional Chinese':'English'}. Return only revised text.`,false,customApiKey);setText(res);}catch(e){}finally{setLoading(false);}};return(<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[10000] p-4"><div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 animate-fadeIn relative"><button onClick={onClose}className="absolute top-4 right-4 text-gray-400"><X size={20}/></button><h3 className="font-bold mb-4 flex items-center gap-2 text-indigo-600"><Bot/> {t.refineTitle}</h3><textarea className="w-full p-2 border rounded mb-4 h-32"value={text}onChange={e=>setText(e.target.value)}/><div className="grid grid-cols-2 gap-2 mb-4"><button disabled={loading}onClick={()=>run('Specific')}className="p-2 bg-gray-100 rounded text-xs hover:bg-gray-200">{t.btnSpecific}</button><button disabled={loading}onClick={()=>run('Attractive')}className="p-2 bg-gray-100 rounded text-xs hover:bg-gray-200">{t.btnAttractive}</button></div><button onClick={()=>onSave(text)}className="w-full py-2 bg-indigo-600 text-white rounded font-bold hover:bg-indigo-700">{t.btnConfirmRefine}</button></div></div>);};
+        const ItemRefineModal=({isOpen,onClose,item,context,sectionTitle,onSave,t,lang,customApiKey, setSettingsOpen})=>{
+            if(!isOpen)return null;const[text,setText]=useState('');const[loading,setLoading]=useState(false);useEffect(()=>{if(isOpen&&item)setText(typeof item.text==='string'?item.text:JSON.stringify(item.text));},[isOpen,item]);
+            const run=async(act)=>{
+                setLoading(true);
+                try{const res=await geminiCall(`Context:${context}. Section:${sectionTitle}. Text:${text}. Action:${act}. Lang:${lang==='zh'?'Traditional Chinese':'English'}. Return only revised text.`,false,customApiKey);setText(res);}
+                catch(e){
+                    if(e.message === "API_KEY_MISSING") {
+                        onClose();
+                        setSettingsOpen(true);
+                    }
+                }finally{setLoading(false);}
+            };
+            return(<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[10000] p-4"><div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 animate-fadeIn relative"><button onClick={onClose}className="absolute top-4 right-4 text-gray-400"><X size={20}/></button><h3 className="font-bold mb-4 flex items-center gap-2 text-indigo-600"><Bot/> {t.refineTitle}</h3><textarea className="w-full p-2 border rounded mb-4 h-32"value={text}onChange={e=>setText(e.target.value)}/><div className="grid grid-cols-2 gap-2 mb-4"><button disabled={loading}onClick={()=>run('Specific')}className="p-2 bg-gray-100 rounded text-xs hover:bg-gray-200">{t.btnSpecific}</button><button disabled={loading}onClick={()=>run('Attractive')}className="p-2 bg-gray-100 rounded text-xs hover:bg-gray-200">{t.btnAttractive}</button></div><button onClick={()=>onSave(text)}className="w-full py-2 bg-indigo-600 text-white rounded font-bold hover:bg-indigo-700">{t.btnConfirmRefine}</button></div></div>);
+        };
         const TopicGuideModal=({isOpen,onClose,sectionId,t,customGuides})=>{if(!isOpen||!sectionId)return null;const section=t.sections[sectionId];const customInfo=customGuides&&customGuides[sectionId];return(<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[10000] p-4"><div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 animate-fadeIn relative"><button onClick={onClose}className="absolute top-4 right-4 text-gray-400"><X size={20}/></button><h3 className="text-xl font-bold mb-4 text-indigo-600">{t.topicHelp}</h3><div className="mb-4"><h4 className="font-bold">{section.title}</h4><p className="text-gray-600">{customInfo?.description||section.desc}</p></div><div className="bg-indigo-50 p-3 rounded text-sm text-indigo-800">{customInfo?.promptGuide||getInitialCanvasData()[sectionId].promptGuide}</div></div></div>);};
         
         // RESTORED: EncyclopediaModal was missing in the previous context but required
@@ -657,7 +650,53 @@
         };
 
         const ContextModal=({isOpen,onClose,value,onChange,t,onStart})=>{if(!isOpen)return null;return(<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-4"><div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 animate-fadeIn relative"><button onClick={onClose}className="absolute top-4 right-4 text-gray-400"><X size={20}/></button><h2 className="text-xl font-bold mb-2 flex items-center gap-2 text-indigo-600"><Sparkles/> {t.modalContextTitle}</h2><p className="text-sm text-gray-500 mb-4">{t.modalContextDesc}</p><textarea value={value}onChange={e=>onChange(e.target.value)}className="w-full p-3 border border-indigo-100 rounded-lg mb-4 h-32 focus:ring-2 focus:ring-indigo-500 focus:outline-none"placeholder={t.placeholderContext}></textarea><div className="flex justify-end gap-2"><button onClick={onClose}className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded">{t.btnNoSet}</button><button onClick={()=>{onStart();onClose();}}className="px-6 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 shadow-md">{t.btnStartPlan}</button></div></div></div>);};
-        const AiConsultantModal=({isOpen,onClose,mode,sectionId,context,canvasData,onComplete,t,lang,setApiError,customApiKey})=>{const[step,setStep]=useState('loading_questions');const[questions,setQuestions]=useState([]);const[answers,setAnswers]=useState({});useEffect(()=>{if(isOpen){setStep('loading_questions');setQuestions([]);setAnswers({});const fetchQuestions=async()=>{try{const langInst=lang==='zh'?"繁體中文":"English";let prompt="";if(mode==='global'){prompt=`Role: Experienced Business Consultant. Context: User wants to create a business model for "${context}". Task: Ask 3-5 crucial, thought-provoking questions to help define the business model. Output: JSON Array of strings. Language: ${langInst}.`;}else{prompt=`Role: Business Consultant. Context: "${context}", Section: "${t.sections[sectionId].title}". Task: Ask 3 questions to help fill this section. Output: JSON Array of strings. Language: ${langInst}.`;}const result=await geminiCall(prompt,true,customApiKey);if(Array.isArray(result)){setQuestions(result);setStep('answering');}else throw new Error("Format");}catch(e){setApiError(e.message);onClose();}};fetchQuestions();}},[isOpen]);const handleGenerate=async(skip)=>{setStep('generating');try{const inputs=skip?"User skipped questions.":Object.entries(answers).map(([i,a])=>`Q: ${questions[i]} A: ${a}`).join("\n");const langInst=lang==='zh'?"繁體中文":"English";let res;if(mode==='global'){const keys=Object.keys(canvasData);const prompt=`Role: Business Architect. Task: Generate a Business Model Canvas. Context: "${context}". User Input: ${inputs}. Output: JSON object with keys: ${keys.join(', ')}. Each key maps to an array of 3 strings. Language: ${langInst}.`;res=await geminiCall(prompt,true,customApiKey);}else{const prompt=`Role: Business Consultant. Task: Suggest 3 items for "${t.sections[sectionId].title}". Context: "${context}". User Input: ${inputs}. Output: JSON Array of strings. Language: ${langInst}.`;res=await geminiCall(prompt,true,customApiKey);}onComplete(res,mode);onClose();}catch(e){setApiError(e.message);onClose();}};if(!isOpen)return null;return(<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[10000] p-4"><div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl p-6 animate-fadeIn relative min-h-[400px] flex flex-col"><button onClick={onClose}className="absolute top-4 right-4 text-gray-400"><X size={20}/></button>{step!=='answering'?(<div className="flex-1 flex flex-col items-center justify-center"><Loader2 size={48}className="animate-spin text-indigo-500 mb-4"/><p className="text-gray-600 font-medium">{step==='loading_questions'?t.loadingAnalysis:t.loadingGlobal}</p></div>):(<div className="flex-1 flex flex-col min-h-0"><div className="mb-4"><h3 className="font-bold text-xl mb-1 flex items-center gap-2 text-indigo-600"><MessageCircleQuestion/> {t.aiConsultantTitle}</h3><p className="text-sm text-gray-500">{t.aiConsultantDesc}</p></div><div className="flex-1 overflow-y-auto mb-4 space-y-4 pr-2">{questions.map((q,i)=>(<div key={i}className="bg-gray-50 p-4 rounded-lg border border-gray-100"><p className="text-sm font-bold mb-2 text-slate-800">{i+1}. {q}</p><textarea className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 outline-none text-sm"rows={2}value={answers[i]||''}onChange={e=>setAnswers({...answers,[i]:e.target.value})}placeholder="..."/></div>))}</div><div className="flex flex-col gap-2 mt-auto"><button onClick={()=>handleGenerate(false)}className="w-full py-3 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 shadow-sm">{t.submitAndGenerate}</button><button onClick={()=>handleGenerate(true)}className="text-xs text-center text-gray-400 hover:text-gray-600 underline">{t.skipAndGenerate}</button></div></div>)}</div></div>);};
+        const AiConsultantModal=({isOpen,onClose,mode,sectionId,context,canvasData,onComplete,t,lang,setApiError,customApiKey, setSettingsOpen})=>{
+            const[step,setStep]=useState('loading_questions');const[questions,setQuestions]=useState([]);const[answers,setAnswers]=useState({});
+            useEffect(()=>{
+                if(isOpen){
+                    setStep('loading_questions');setQuestions([]);setAnswers({});
+                    const fetchQuestions=async()=>{
+                        try{
+                            const langInst=lang==='zh'?"繁體中文":"English";
+                            let prompt="";
+                            if(mode==='global'){prompt=`Role: Experienced Business Consultant. Context: User wants to create a business model for "${context}". Task: Ask 3-5 crucial, thought-provoking questions to help define the business model. Output: JSON Array of strings. Language: ${langInst}.`;}
+                            else{prompt=`Role: Business Consultant. Context: "${context}", Section: "${t.sections[sectionId].title}". Task: Ask 3 questions to help fill this section. Output: JSON Array of strings. Language: ${langInst}.`;}
+                            
+                            const result=await geminiCall(prompt,true,customApiKey);
+                            if(Array.isArray(result)){setQuestions(result);setStep('answering');}else throw new Error("Format");
+                        }catch(e){
+                            if(e.message === "API_KEY_MISSING") {
+                                onClose();
+                                setSettingsOpen(true);
+                            } else {
+                                setApiError(e.message);
+                                onClose();
+                            }
+                        }
+                    };
+                    fetchQuestions();
+                }
+            },[isOpen]);
+            const handleGenerate=async(skip)=>{
+                setStep('generating');
+                try{
+                    const inputs=skip?"User skipped questions.":Object.entries(answers).map(([i,a])=>`Q: ${questions[i]} A: ${a}`).join("\n");
+                    const langInst=lang==='zh'?"繁體中文":"English";
+                    let res;
+                    if(mode==='global'){const keys=Object.keys(canvasData);const prompt=`Role: Business Architect. Task: Generate a Business Model Canvas. Context: "${context}". User Input: ${inputs}. Output: JSON object with keys: ${keys.join(', ')}. Each key maps to an array of 3 strings. Language: ${langInst}.`;res=await geminiCall(prompt,true,customApiKey);}else{const prompt=`Role: Business Consultant. Task: Suggest 3 items for "${t.sections[sectionId].title}". Context: "${context}". User Input: ${inputs}. Output: JSON Array of strings. Language: ${langInst}.`;res=await geminiCall(prompt,true,customApiKey);}
+                    onComplete(res,mode);onClose();
+                }catch(e){
+                    if(e.message === "API_KEY_MISSING") {
+                        onClose();
+                        setSettingsOpen(true);
+                    } else {
+                        setApiError(e.message);
+                        onClose();
+                    }
+                }
+            };
+            if(!isOpen)return null;return(<div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[10000] p-4"><div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl p-6 animate-fadeIn relative min-h-[400px] flex flex-col"><button onClick={onClose}className="absolute top-4 right-4 text-gray-400"><X size={20}/></button>{step!=='answering'?(<div className="flex-1 flex flex-col items-center justify-center"><Loader2 size={48}className="animate-spin text-indigo-500 mb-4"/><p className="text-gray-600 font-medium">{step==='loading_questions'?t.loadingAnalysis:t.loadingGlobal}</p></div>):(<div className="flex-1 flex flex-col min-h-0"><div className="mb-4"><h3 className="font-bold text-xl mb-1 flex items-center gap-2 text-indigo-600"><MessageCircleQuestion/> {t.aiConsultantTitle}</h3><p className="text-sm text-gray-500">{t.aiConsultantDesc}</p></div><div className="flex-1 overflow-y-auto mb-4 space-y-4 pr-2">{questions.map((q,i)=>(<div key={i}className="bg-gray-50 p-4 rounded-lg border border-gray-100"><p className="text-sm font-bold mb-2 text-slate-800">{i+1}. {q}</p><textarea className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 outline-none text-sm"rows={2}value={answers[i]||''}onChange={e=>setAnswers({...answers,[i]:e.target.value})}placeholder="..."/></div>))}</div><div className="flex flex-col gap-2 mt-auto"><button onClick={()=>handleGenerate(false)}className="w-full py-3 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 shadow-sm">{t.submitAndGenerate}</button><button onClick={()=>handleGenerate(true)}className="text-xs text-center text-gray-400 hover:text-gray-600 underline">{t.skipAndGenerate}</button></div></div>)}</div></div>);
+        };
         const CanvasSection = ({ sectionKey, canvasData, activeSection, setActiveSection, newItemText, setNewItemText, handleAddItem, handleDeleteItem, openConsultant, openItemRefiner, aiSuggestions, setAiSuggestions, openTopicGuide, customGuides, className = "", t }) => {
           const section = canvasData[sectionKey]; 
           const staticText = t.sections[sectionKey];
@@ -721,7 +760,6 @@
           const [aiSuggestions, setAiSuggestions] = useState(null); 
           const [lang, setLang] = useState('zh');
           const [isSustainableMode, setIsSustainableMode] = useState(false);
-          const [dailyUsage, setDailyUsage] = useState(getLocalUsage());
           const [customApiKey, setCustomApiKey] = useState(''); 
           
           const [isContextModalOpen, setIsContextModalOpen] = useState(false);
@@ -741,13 +779,6 @@
           const [apiError, setApiError] = useState('');
 
           const t = TRANSLATIONS[lang];
-
-          // 監聽額度更新
-          useEffect(() => {
-            const handleUpdate = () => setDailyUsage(getLocalUsage());
-            window.addEventListener('usageUpdated', handleUpdate);
-            return () => window.removeEventListener('usageUpdated', handleUpdate);
-          }, []);
 
           // Persistence Hook
           useEffect(() => {
@@ -800,7 +831,10 @@
                   const prompt = `Context: ${businessContext}. Rewrite 1-sentence UI subtitle for BMC sections. Return JSON { sectionId: { subtitle: "text" } }. Keys: ${keys.join(',')}. Lang: ${lang==='zh'?'Traditional Chinese':'English'}.`;
                   const res = await geminiCall(prompt, true, customApiKey);
                   setCustomGuides(res);
-              } catch(e) { setApiError(e.message); } finally { setLoadingPersonalize(false); }
+              } catch(e) { 
+                  if(e.message === "API_KEY_MISSING") { setSettingsOpen(true); } 
+                  else { setApiError(e.message); }
+              } finally { setLoadingPersonalize(false); }
           };
 
           const handleBrandAnalysis = async (brandName) => {
@@ -816,7 +850,10 @@
                       Object.keys(result).forEach(key => { if (newData[key]) { newData[key] = { ...newData[key], items: result[key].map(t => ({ id: Date.now() + Math.random(), text: t })) }; } });
                       return newData;
                   });
-              } catch (e) { setApiError(e.message); } finally { setIsBrandAnalyzing(false); }
+              } catch (e) { 
+                  if(e.message === "API_KEY_MISSING") { setSettingsOpen(true); } 
+                  else { setApiError(e.message); }
+              } finally { setIsBrandAnalyzing(false); }
           };
 
           const handleAnalysis = async () => {
@@ -828,7 +865,10 @@
               try { 
                   const result = await geminiCall(prompt, false, customApiKey); 
                   setReportModal({ isOpen: true, text: result }); 
-              } catch (err) { setApiError(err.message); } finally { setIsAnalyzing(false); }
+              } catch (e) { 
+                  if(e.message === "API_KEY_MISSING") { setSettingsOpen(true); } 
+                  else { setApiError(e.message); }
+              } finally { setIsAnalyzing(false); }
           };
 
           const sectionProps = { canvasData, activeSection, setActiveSection, newItemText, setNewItemText, handleAddItem, handleDeleteItem, openConsultant, openItemRefiner, aiSuggestions, setAiSuggestions, openTopicGuide, t, customGuides };
@@ -838,8 +878,8 @@
               <ContextModal isOpen={isContextModalOpen} onClose={() => setIsContextModalOpen(false)} value={businessContext} onChange={setBusinessContext} t={t} lang={lang} onStart={handlePersonalizeGuides} />
               <ExportModal isOpen={isExportModalOpen} onClose={() => setIsExportModalOpen(false)} canvasData={canvasData} t={t} context={businessContext} />
               <ResetModal isOpen={resetModalOpen} onClose={() => setResetModalOpen(false)} onConfirmSave={null} onConfirmClear={handleConfirmClear} t={t} />
-              <AiConsultantModal isOpen={consultant.isOpen} onClose={() => setConsultant({ ...consultant, isOpen: false })} mode={consultant.mode} sectionId={consultant.sectionId} context={businessContext} canvasData={canvasData} onComplete={(res, mode)=>{ if(mode==='global'){ setCanvasData(prev => { const n={...prev}; Object.keys(res).forEach(k=>{ if(n[k]) n[k].items = res[k].map(t=>({id:Date.now()+Math.random(), text:t})) }); return n; }); } else { setAiSuggestions({ sectionId: consultant.sectionId, items: res }); } }} t={t} lang={lang} setApiError={setApiError} customApiKey={customApiKey} />
-              <ItemRefineModal isOpen={itemRefiner.isOpen} onClose={() => setItemRefiner({ ...itemRefiner, isOpen: false })} item={itemRefiner.item} context={businessContext} sectionTitle={itemRefiner.sectionTitle} onSave={saveRefinedItem} t={t} lang={lang} customApiKey={customApiKey} />
+              <AiConsultantModal isOpen={consultant.isOpen} onClose={() => setConsultant({ ...consultant, isOpen: false })} mode={consultant.mode} sectionId={consultant.sectionId} context={businessContext} canvasData={canvasData} onComplete={(res, mode)=>{ if(mode==='global'){ setCanvasData(prev => { const n={...prev}; Object.keys(res).forEach(k=>{ if(n[k]) n[k].items = res[k].map(t=>({id:Date.now()+Math.random(), text:t})) }); return n; }); } else { setAiSuggestions({ sectionId: consultant.sectionId, items: res }); } }} t={t} lang={lang} setApiError={setApiError} customApiKey={customApiKey} setSettingsOpen={setSettingsOpen} />
+              <ItemRefineModal isOpen={itemRefiner.isOpen} onClose={() => setItemRefiner({ ...itemRefiner, isOpen: false })} item={itemRefiner.item} context={businessContext} sectionTitle={itemRefiner.sectionTitle} onSave={saveRefinedItem} t={t} lang={lang} customApiKey={customApiKey} setSettingsOpen={setSettingsOpen} />
               <BrandModal isOpen={brandModalOpen} onClose={() => setBrandModalOpen(false)} onSelect={handleBrandAnalysis} t={t} />
               <TopicGuideModal isOpen={topicGuide.isOpen} onClose={() => setTopicGuide({ ...topicGuide, isOpen: false })} sectionId={topicGuide.sectionId} t={t} customGuides={customGuides} />
               <EncyclopediaModal isOpen={encyclopediaOpen} onClose={() => setEncyclopediaOpen(false)} t={t} customGuides={customGuides} />
@@ -941,6 +981,7 @@
               <footer className="text-center pb-8 no-print px-4">
                   {/* WARNING TEXT MOVED HERE */}
                   <p className="text-red-500 text-xs mb-2 font-medium">{t.aiWarning}</p>
+                  <p className="text-gray-400 text-xs">如果你想要解鎖付費AI版本，歡迎與我們聯絡 <a href="mailto:dt@designthinking.com.tw" class="text-indigo-600 hover:text-indigo-800 font-medium">dt@designthinking.com.tw</a></p>
               </footer>
             </div>
           );
